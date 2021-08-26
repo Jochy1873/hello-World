@@ -1,23 +1,26 @@
-# For a detailed guide to building and testing on iOS, read the docs:
-# https://circleci.com/docs/2.0/testing-ios/
-
+# This config uses the `.circleci/extended/orb-test.yml` as its base, and then publishes the app to S3.
+# The workflow contained here demonstrates a practical application of `post-steps`
+# and using workspace persistence
 version: 2.1
 
-jobs:
-  build:
+orbs:
+  node: circleci/node@4.1
+  # The S3 orb will setup the aws-cli and quickly copy or sync anything to s3.
+  # Orbs reduce the amount of configuration required for common tasks.
+  # See the orb documentation here: https://circleci.com/developer/orbs/orb/circleci/aws-s3
+  # NOTE: Environment variables containing the necessary secrets can be setup in the CircleCI UI
+  # See here https://circleci.com/docs/2.0/env-vars/#setting-an-environment-variable-in-a-project
+  aws-s3: circleci/aws-s3@2.0
 
-    macos:
-      xcode: 11.0.0 # Specify the Xcode version to use
-
-    steps:
-      - checkout
-      - run: pod install # Install CocoaPods dependencies
-      - run: fastlane scan # Run tests using Fastlane
-
-      # Collect XML test results data to show in the UI, and save the same XML
-      # files under test-results folder in the Artifacts tab
-      - store_test_results:
-          path: test_output
-      - store_artifacts:
-          path: test_output
-          destination: scan-output
+workflows:
+  sample:
+    jobs:
+      - node/test:
+          version: '15.1'
+          # after the node/test job completes, build the dist packages and save them to a workspace
+          post-steps:
+            - run: npm run build
+            - aws-s3/copy:
+                from: dist/
+                to: s3://sample-app-vue
+                arguments: --recursive
